@@ -345,7 +345,7 @@ namespace BSPConvert.Lib
 				else if (texModInfo.type == TexMod.TMOD_STRETCH || texModInfo.type == TexMod.TMOD_SCALE)
 					sb.AppendLine("\t\t\tscaleVar $scale");
 			}
-			
+
 			sb.AppendLine("\t\t\tinitialValue 0");
 			sb.AppendLine("\t\t\tresultVar $basetexturetransform");
 			sb.AppendLine("\t\t}");
