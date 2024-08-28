@@ -57,6 +57,7 @@ namespace BSPConvert.Lib
 		}
 		public int minDamageToConvertTrigger;
 		public bool ignoreZones;
+		public int smoothShadows;
 		public bool oldBSP;
 		public string prefix;
 		public string inputFile;
@@ -72,7 +73,7 @@ namespace BSPConvert.Lib
 		private BSP sourceBsp;
 
 		private ContentManager contentManager;
-		
+
 		private Dictionary<string, Shader> shaderDict = new Dictionary<string, Shader>();
 		private Dictionary<string, LightmapData> externalLightmaps = new Dictionary<string, LightmapData>();
 		private Dictionary<int, int> textureInfoHashCodeDict = new Dictionary<int, int>(); // Maps TextureInfo hash codes to TextureInfo indices
@@ -112,7 +113,7 @@ namespace BSPConvert.Lib
 			}
 
 			CheckQ3Content();
-			
+
 			contentManager = new ContentManager(options.inputFile);
 			shaderDict = LoadShaderDictionary();
 			externalLightmaps = LoadExternalLightmaps();
@@ -220,7 +221,7 @@ namespace BSPConvert.Lib
 
 		private void ConvertMaterials()
 		{
-			var materialConverter = new MaterialConverter(contentManager.ContentDir, shaderDict);
+			var materialConverter = new MaterialConverter(contentManager.ContentDir, shaderDict, options.smoothShadows);
 			foreach (var texture in quakeBsp.Textures)
 				materialConverter.Convert(texture.Name);
 		}
@@ -307,15 +308,15 @@ namespace BSPConvert.Lib
 			try
 			{
 				var textureData = CreateTextureData();
-				
+
 				var vtfFile = FileUtil.DeserializeFromFile(vtfPath, VTFFile.Deserialize);
 				var header = vtfFile.header;
-				
+
 				var r = (int)Math.Round(header.reflectivityX * 255f);
 				var g = (int)Math.Round(header.reflectivityY * 255f);
 				var b = (int)Math.Round(header.reflectivityZ * 255f);
 				textureData.Reflectivity = ColorExtensions.FromArgb(255, r, g, b);
-				
+
 				var size = new Vector2(vtfFile.header.width, vtfFile.header.height);
 				textureData.Size = size;
 				textureData.ViewSize = size;
@@ -583,7 +584,7 @@ namespace BSPConvert.Lib
 					numFaces += splitFaceDict[(int)quakeBsp.LeafFaces[qLeaf.FirstMarkFaceIndex + i]].Length;
 				leaf.NumMarkFaceIndices = numFaces;
 				currentFaceIndex += numFaces;
-				
+
 				leaf.FirstMarkBrushIndex = qLeaf.FirstMarkBrushIndex;
 				leaf.NumMarkBrushIndices = qLeaf.NumMarkBrushIndices;
 				leaf.LeafWaterDataID = -1;
@@ -643,7 +644,7 @@ namespace BSPConvert.Lib
 						logger.Log($"Failed to convert model: {i}");
 						continue;
 					}
-					
+
 					sModel.HeadNodeIndex = nodeIndex;
 				}
 
@@ -691,7 +692,7 @@ namespace BSPConvert.Lib
 
 			var data = new byte[Node.GetStructLength(sourceBsp.MapType)];
 			var node = new Node(data, sourceBsp.Nodes);
-			
+
 			node.Child1Index = -leafIndex - 1;
 			node.Child2Index = -leafIndex - 1;
 
@@ -751,16 +752,16 @@ namespace BSPConvert.Lib
 
 			if (q3Contents.HasFlag(Q3ContentsFlags.CONTENTS_SOLID))
 				sourceContents |= SourceContentsFlags.CONTENTS_SOLID;
-			
+
 			if (q3Contents.HasFlag(Q3ContentsFlags.CONTENTS_LAVA) ||
 				q3Contents.HasFlag(Q3ContentsFlags.CONTENTS_WATER))
 			{
 				sourceContents |= SourceContentsFlags.CONTENTS_WATER;
 			}
-			
+
 			if (q3Contents.HasFlag(Q3ContentsFlags.CONTENTS_SLIME))
 				sourceContents |= SourceContentsFlags.CONTENTS_SLIME;
-			
+
 			if (q3Contents.HasFlag(Q3ContentsFlags.CONTENTS_PLAYERCLIP))
 				sourceContents |= SourceContentsFlags.CONTENTS_PLAYERCLIP;
 
@@ -795,7 +796,7 @@ namespace BSPConvert.Lib
 			var textureIndex = LookupTextureInfoIndex(qBrushSide.Texture.Name);
 			if (textureIndex > -1)
 				return textureIndex;
-			
+
 			(var uAxis, var vAxis) = GetTextureVectorsWithNormal(qBrushSide.Plane.Normal);
 			return CreateTextureInfo(qBrushSide.Texture, uAxis, vAxis);
 		}
@@ -966,7 +967,7 @@ namespace BSPConvert.Lib
 			face.SmoothingGroups = 0;
 
 			sourceBsp.Faces.Add(face);
-			
+
 			return face;
 		}
 
@@ -1012,7 +1013,7 @@ namespace BSPConvert.Lib
 		private int CreatePatchFace(Vertex[] faceVerts, int faceIndex)
 		{
 			var sFace = CreateFace();
-			
+
 			var dispIndex = sourceBsp.Displacements.Count;
 			sFace.DisplacementIndex = dispIndex;
 
@@ -1091,7 +1092,7 @@ namespace BSPConvert.Lib
 
 			if (shaderDict.TryGetValue(texture, out var shader) && shader.surfaceFlags.HasFlag(Q3SurfaceFlags.SURF_NONSOLID))
 				minTess |= (int)DisplacementFlags.SURF_NOHULL_COLL | (int)DisplacementFlags.SURF_NORAY_COLL;
-			
+
 			return minTess;
 		}
 
@@ -1314,7 +1315,7 @@ namespace BSPConvert.Lib
 		{
 			var data = new byte[TextureInfo.GetStructLength(sourceBsp.MapType)];
 			var textureInfo = new TextureInfo(data, sourceBsp.TextureInfo);
-			
+
 			// TODO: Get UV data from face vertices
 			textureInfo.UAxis = uAxis;
 			textureInfo.VAxis = vAxis;
@@ -1328,7 +1329,7 @@ namespace BSPConvert.Lib
 
 			if (q3Flags.HasFlag(Q3SurfaceFlags.SURF_NOLIGHTMAP))
 				textureInfo.Flags |= (int)SourceSurfaceFlags.SURF_NOLIGHT;
-			
+
 			if (q3Flags.HasFlag(Q3SurfaceFlags.SURF_SKY))
 				textureInfo.Flags |= (int)(SourceSurfaceFlags.SURF_SKY | SourceSurfaceFlags.SURF_NOLIGHT | SourceSurfaceFlags.SURF_SKYNOEMIT);
 
@@ -1377,7 +1378,7 @@ namespace BSPConvert.Lib
 			var den = deltaUV1.X * deltaUV2.Y - deltaUV2.X * deltaUV1.Y;
 			if (Math.Abs(den) < 0.01f)
 				return GetTextureVectorsWithNormal(qFace.Normal);
-			
+
 			var r = 1f / den;
 			var tangent = (deltaPos1 * deltaUV2.Y - deltaPos2 * deltaUV1.Y) * r / 32f;
 			var binormal = (deltaPos2 * deltaUV1.X - deltaPos1 * deltaUV2.X) * r / 32f;
@@ -1468,7 +1469,8 @@ namespace BSPConvert.Lib
 						var color = ColorUtil.ConvertQ3LightmapToColorRGBExp32(
 							qLightmapData[q3LightmapOffset + index * 3 + 0],
 							qLightmapData[q3LightmapOffset + index * 3 + 1],
-							qLightmapData[q3LightmapOffset + index * 3 + 2]);
+							qLightmapData[q3LightmapOffset + index * 3 + 2],
+							4 * options.smoothShadows); // internal lightmaps need * 4 brightness, darker than external lightmaps.
 
 						lmColors.Add(color);
 					}
@@ -1536,7 +1538,8 @@ namespace BSPConvert.Lib
 						var color = ColorUtil.ConvertQ3LightmapToColorRGBExp32(
 							lmData.data[index * 3 + 0],
 							lmData.data[index * 3 + 1],
-							lmData.data[index * 3 + 2]);
+							lmData.data[index * 3 + 2],
+							options.smoothShadows);
 
 						lmColors.Add(color);
 					}
@@ -1576,7 +1579,7 @@ namespace BSPConvert.Lib
 					uvMin.X = vert.uv1.X;
 				if (vert.uv1.Y < uvMin.Y)
 					uvMin.Y = vert.uv1.Y;
-				
+
 				if (vert.uv1.X > uvMax.X)
 					uvMax.X = vert.uv1.X;
 				if (vert.uv1.Y > uvMax.Y)
@@ -1711,7 +1714,7 @@ namespace BSPConvert.Lib
 			var writer = new BSPWriter(sourceBsp);
 			var bspPath = Path.Combine(mapsDir, $"{options.prefix}{quakeBsp.MapName}.bsp");
 			writer.WriteBSP(bspPath);
-			
+
 			logger.Log($"Converted BSP: {bspPath}");
 		}
 	}
