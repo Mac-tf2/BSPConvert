@@ -516,7 +516,7 @@ namespace BSPConvert.Lib
 				if (target.ClassName != "point_teleport")
 				{
 					if (target.ClassName != "info_teleport_destination") //if already a teleport_destination, origin has been fixed elsewhere
-					SetTeleportOrigin(target);
+						SetTeleportOrigin(target);
 
 					target.ClassName = "point_teleport";
 					target["target"] = "!player";
